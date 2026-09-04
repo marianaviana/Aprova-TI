@@ -1,0 +1,315 @@
+import express from "express";
+import path from "path";
+import dotenv from "dotenv";
+import { GoogleGenAI, Type } from "@google/genai";
+import { EXAMS_INFO, SYLLABUS_DATA } from "./src/data/syllabusData.js";
+import { CURATED_QUESTIONS } from "./src/data/curatedQuestions.js";
+
+dotenv.config();
+
+const app = express();
+const PORT = 3000;
+
+app.use(express.json());
+
+// Lazy-initialized Gemini Client
+let aiClient: GoogleGenAI | null = null;
+function getAiClient(): GoogleGenAI {
+  if (!aiClient) {
+    aiClient = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
+  }
+  return aiClient;
+}
+
+// API Routes
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    hasApiKey: !!process.env.GEMINI_API_KEY,
+    time: new Date().toISOString(),
+  });
+});
+
+app.get("/api/syllabus", (req, res) => {
+  res.json({
+    exams: EXAMS_INFO,
+    syllabus: SYLLABUS_DATA,
+  });
+});
+
+app.get("/api/curated-questions", (req, res) => {
+  const { examId, subjectId, format } = req.query;
+  let questions = [...CURATED_QUESTIONS];
+
+  if (examId) {
+    questions = questions.filter((q) => q.examId === examId);
+  }
+  if (subjectId && subjectId !== "all") {
+    questions = questions.filter((q) => q.subjectId === subjectId);
+  }
+  if (format) {
+    questions = questions.filter((q) => q.format === format);
+  }
+
+  res.json({
+    count: questions.length,
+    questions,
+  });
+});
+
+// AI Question Generator Endpoint
+app.post("/api/generate-questions", async (req, res) => {
+  const {
+    examId = "seplag",
+    profileId,
+    subjectId,
+    format = "multipla_escolha",
+    count = 5,
+    difficulty = "Difícil",
+  } = req.body;
+
+  const targetExam = EXAMS_INFO[examId] || EXAMS_INFO.seplag;
+
+  // Find relevant subjects & syllabus topics
+  let relevantSubjects = SYLLABUS_DATA.filter((s) => s.examId === examId);
+  if (profileId) {
+    relevantSubjects = relevantSubjects.filter(
+      (s) => !s.profileId || s.profileId === profileId
+    );
+  }
+  if (subjectId && subjectId !== "all") {
+    relevantSubjects = relevantSubjects.filter((s) => s.id === subjectId);
+  }
+
+  // If no subject found, use all
+  if (relevantSubjects.length === 0) {
+    relevantSubjects = SYLLABUS_DATA.filter((s) => s.examId === examId);
+  }
+
+  const subjectsSummary = relevantSubjects
+    .map((s) => {
+      const topicsList = s.topics
+        .map((t) => `- ${t.name}: ${t.subtopics.slice(0, 4).join("; ")}`)
+        .join("\n");
+      return `Disciplina: ${s.name}\n${topicsList}`;
+    })
+    .join("\n\n");
+
+  const isTrueFalse = format === "certo_errado";
+  const numQuestions = Math.min(Math.max(Number(count) || 5, 1), 10);
+
+  // If no API key is set, fallback to curated questions
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("GEMINI_API_KEY not found. Returning curated questions.");
+    let filtered = CURATED_QUESTIONS.filter((q) => q.examId === examId);
+    if (format) filtered = filtered.filter((q) => q.format === format);
+    if (subjectId && subjectId !== "all") {
+      filtered = filtered.filter((q) => q.subjectId === subjectId);
+    }
+    if (filtered.length === 0) {
+      filtered = CURATED_QUESTIONS.filter((q) => q.examId === examId);
+    }
+    return res.json({
+      success: true,
+      fromCurated: true,
+      questions: filtered.slice(0, numQuestions),
+    });
+  }
+
+  try {
+    const prompt = `Você é o examinador sênior da banca Fundação Getulio Vargas (FGV Conhecimento) para concursos de alto nível na área de Tecnologia da Informação (${targetExam.name} - ${targetExam.role}).
+Gere exatamente ${numQuestions} questões INÉDITAS e de alta complexidade técnica sobre o conteúdo programático oficial dos editais anexados.
+
+FORMATO REQUISITADO: ${isTrueFalse ? "CERTO ou ERRADO (estilo julgamento de assertiva técnica com fundamentação)" : "MÚLTIPLA ESCOLHA com exatamente 5 alternativas (A, B, C, D, E)"}.
+NÍVEL DE DIFICULDADE: ${difficulty} (Padrão FGV de prova de elite: cenários de casos práticos, tomada de decisão em governança/arquitetura/engenharia de dados, distratores sutis e inteligentes).
+
+CONTEÚDO PROGRAMÁTICO DE REFERÊNCIA:
+${subjectsSummary}
+
+REQUISITOS OBRIGATÓRIOS PARA CADA QUESTÃO:
+1. "statement": Enunciado contextualizado, rico, com caso hipotético realista de órgão público ou empresa estatal.
+2. "options": ${isTrueFalse ? 'Exatamente 2 opções: {"id": "C", "text": "Certo"} e {"id": "E", "text": "Errado"}' : 'Exatamente 5 opções: {"id": "A"}, {"id": "B"}, {"id": "C"}, {"id": "D"}, {"id": "E"}'}.
+3. "correctOptionId": O identificador da opção correta (${isTrueFalse ? '"C" ou "E"' : '"A", "B", "C", "D" ou "E"'}).
+4. "justification": Justificativa aprofundada demonstrando o porquê técnico da resposta correta e analisando por que os distratores induzem o candidato ao erro (estilo FGV).
+5. "syllabusCitation": Citação formal exata do tópico do Edital correspondente (ex: "${targetExam.shortName} Anexo I - Governança e Gestão de TIC: COBIT 2019").
+6. "subjectName": Nome da disciplina.
+7. "topicName": Nome do tópico programático.`;
+
+    const response = await getAiClient().models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              statement: {
+                type: Type.STRING,
+                description: "Enunciado contextualizado da questão.",
+              },
+              options: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING, description: "Identificador (A, B, C, D, E ou C, E)" },
+                    text: { type: Type.STRING, description: "Texto da alternativa" },
+                  },
+                  required: ["id", "text"],
+                },
+              },
+              correctOptionId: {
+                type: Type.STRING,
+                description: "Alternativa correta",
+              },
+              justification: {
+                type: Type.STRING,
+                description: "Fundamentação teórica do gabarito e análise dos distratores.",
+              },
+              syllabusCitation: {
+                type: Type.STRING,
+                description: "Citação do tópico do edital.",
+              },
+              subjectName: {
+                type: Type.STRING,
+                description: "Disciplina da questão.",
+              },
+              topicName: {
+                type: Type.STRING,
+                description: "Tópico da disciplina.",
+              },
+            },
+            required: [
+              "statement",
+              "options",
+              "correctOptionId",
+              "justification",
+              "syllabusCitation",
+              "subjectName",
+              "topicName",
+            ],
+          },
+        },
+      },
+    });
+
+    const parsed = JSON.parse(response.text || "[]");
+
+    const formattedQuestions = parsed.map((item: any, index: number) => ({
+      id: `ai-gen-${Date.now()}-${index}`,
+      examId,
+      profileId: profileId || undefined,
+      subjectId: subjectId || relevantSubjects[0]?.id || "geral",
+      subjectName: item.subjectName || relevantSubjects[0]?.name || "Tecnologia da Informação",
+      topicName: item.topicName || "Conhecimentos Específicos",
+      format,
+      difficulty,
+      statement: item.statement,
+      options: item.options,
+      correctOptionId: item.correctOptionId,
+      justification: item.justification,
+      syllabusCitation: item.syllabusCitation,
+      isAiGenerated: true,
+    }));
+
+    res.json({
+      success: true,
+      fromCurated: false,
+      questions: formattedQuestions,
+    });
+  } catch (error: any) {
+    console.error("Error generating questions with Gemini:", error);
+    // Graceful fallback to curated questions
+    let filtered = CURATED_QUESTIONS.filter((q) => q.examId === examId);
+    if (format) filtered = filtered.filter((q) => q.format === format);
+    if (filtered.length === 0) filtered = CURATED_QUESTIONS;
+
+    res.json({
+      success: true,
+      fromCurated: true,
+      fallbackReason: error?.message || "Fallback acionado",
+      questions: filtered.slice(0, numQuestions),
+    });
+  }
+});
+
+// Interactive AI Tutor Endpoint
+app.post("/api/explain-question", async (req, res) => {
+  const { question, userAnswer, userQuery } = req.body;
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({
+      explanation: `Dica de Estudo: A resposta correta para esta questão é "${question.correctOptionId}".\n\nFundamentação: ${question.justification}\n\nTópico do Edital: ${question.syllabusCitation}`,
+    });
+  }
+
+  try {
+    const prompt = `Você é um professor mentor especialista em concursos públicos da banca FGV nas carreiras de TI.
+O aluno está respondendo à seguinte questão:
+
+ENUNCIADO:
+${question.statement}
+
+ALTERNATIVAS:
+${question.options.map((o: any) => `${o.id}) ${o.text}`).join("\n")}
+
+GABARITO OFICIAL: Alternativa ${question.correctOptionId}
+JUSTIFICATIVA: ${question.justification}
+TÓPICO DO EDITAL: ${question.syllabusCitation}
+
+RESPOSTA DO ALUNO: ${userAnswer ? `Alternativa ${userAnswer}` : "Ainda não respondeu"}
+DÚVIDA ESPECÍFICA DO ALUNO: ${userQuery || "Explique em detalhes o conceito, as pegadinhas e como não errar questões desse tipo na FGV."}
+
+Responda de forma didática, clara, estruturada e motivadora, apontando exatamente o conceito-chave e o padrão de cobrança da banca FGV.`;
+
+    const response = await getAiClient().models.generateContent({
+      model: "gemini-3.8-flash",
+      contents: prompt,
+    });
+
+    res.json({
+      explanation: response.text,
+    });
+  } catch (error: any) {
+    console.error("Error explaining question:", error);
+    res.json({
+      explanation: `Explicação detalhada:\n\n${question.justification}\n\nConexão com o edital: ${question.syllabusCitation}`,
+    });
+  }
+});
+
+// Vite Middleware Setup
+async function startServer() {
+  if (process.env.NODE_ENV !== "production") {
+    const { createServer: createViteServer } = await import("vite");
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), "dist");
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+startServer().catch((err) => {
+  console.error("Failed to start server:", err);
+  process.exit(1);
+});

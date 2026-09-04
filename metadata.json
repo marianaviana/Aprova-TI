@@ -1,0 +1,6 @@
+{
+  "name": "Simulado Concursos TI",
+  "description": "Simulador interativo de questões inéditas e comentadas para os editais da SEPLAG-RJ e DATAPREV na área de Tecnologia da Informação.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
