@@ -2,7 +2,26 @@ export type ExamId = 'seplag' | 'dataprev' | 'transpetro' | 'abgf';
 
 export type QuestionFormat = 'multipla_escolha' | 'certo_errado';
 
-export type SimuladoMode = 'treino' | 'prova'; // Treino = gabarito imediato; Prova = gabarito ao final com timer
+export type SimuladoMode = 'treino' | 'prova'; // Treino = Estudo com gabarito imediato e Mentor IA; Prova = Prova Real com timer regressivo e sem IA
+
+export type PenaltyRule = 'none' | 'cebraspe'; // 'none' = FGV/FCC/Cesgranrio (1 acerto = 1 pt); 'cebraspe' = 1 errada anula 1 certa (líquida)
+
+export type FlashcardDifficulty = 'facil' | 'medio' | 'dificil' | 'novo';
+
+export interface Flashcard {
+  id: string;
+  front: string; // Pergunta, conceito-chave ou caso prático
+  back: string; // Resposta explicativa, mnemônico ou fundamentação
+  tags: string[]; // ex: ['COBIT 2019', 'Governança', 'FGV']
+  subjectName?: string;
+  topicName?: string;
+  examId?: ExamId;
+  source: 'mentor' | 'caderno_erros' | 'manual' | 'simulado';
+  difficulty: FlashcardDifficulty;
+  timesReviewed: number;
+  lastReviewed?: string;
+  createdAt: string;
+}
 
 export interface SyllabusTopic {
   id: string;
@@ -80,6 +99,9 @@ export interface SimuladoSession {
   profileId?: string;
   mode: SimuladoMode;
   format: QuestionFormat;
+  penaltyRule?: PenaltyRule;
+  netScore?: number;
+  timeLimitMinutes?: number;
   totalQuestions: number;
   correctCount: number;
   scorePercentage: number;
@@ -117,6 +139,9 @@ export interface ChatMessage {
   role: ChatRole;
   content: string;
   timestamp: string;
+  isError?: boolean;
+  canRetry?: boolean;
+  failedUserMessage?: string;
   contextQuestion?: {
     id: string;
     statement: string;

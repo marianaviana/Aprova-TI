@@ -20,7 +20,7 @@ import {
   CheckSquare,
   Flame,
 } from 'lucide-react';
-import { ExamId, QuestionFormat, SimuladoMode } from '../types';
+import { ExamId, QuestionFormat, SimuladoMode, PenaltyRule } from '../types';
 import { EXAMS_INFO, SYLLABUS_DATA } from '../data/syllabusData';
 
 interface SimuladoSetupProps {
@@ -32,6 +32,8 @@ interface SimuladoSetupProps {
     selectedSubjectIds: string[];
     format: QuestionFormat;
     mode: SimuladoMode;
+    penaltyRule?: PenaltyRule;
+    timeLimitMinutes?: number;
     count: number;
     useAi: boolean;
     difficulty: 'Médio' | 'Difícil';
@@ -56,6 +58,8 @@ export const SimuladoSetup: React.FC<SimuladoSetupProps> = ({
   const [subjectSearch, setSubjectSearch] = useState('');
   const [format, setFormat] = useState<QuestionFormat>('multipla_escolha');
   const [mode, setMode] = useState<SimuladoMode>('treino');
+  const [penaltyRule, setPenaltyRule] = useState<PenaltyRule>('none');
+  const [timeLimitMinutes, setTimeLimitMinutes] = useState<number>(15);
   const [count, setCount] = useState<number>(5);
   const [useAi, setUseAi] = useState<boolean>(true);
   const [difficulty, setDifficulty] = useState<'Médio' | 'Difícil'>('Difícil');

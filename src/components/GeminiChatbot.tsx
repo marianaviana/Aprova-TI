@@ -15,6 +15,8 @@ import {
   HelpCircle,
   X,
   ExternalLink,
+  Layers,
+  AlertTriangle,
 } from 'lucide-react';
 import { ChatMessage, ChatbotPersona, Question } from '../types';
 
@@ -23,6 +25,13 @@ interface GeminiChatbotProps {
   onClearContextQuestion?: () => void;
   isFloatingModal?: boolean;
   onCloseModal?: () => void;
+  onCreateFlashcard?: (data: {
+    front: string;
+    back: string;
+    tags: string[];
+    source: 'mentor';
+    subjectName?: string;
+  }) => void;
 }
 
 const STORAGE_KEY = 'aprova_ti_gemini_chat_history_v2';
@@ -114,6 +123,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
   onClearContextQuestion,
   isFloatingModal = false,
   onCloseModal,
+  onCreateFlashcard,
 }) => {
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
@@ -129,7 +139,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
       {
         id: 'welcome-msg',
         role: 'model',
-        content: `👋 **Olá, futuro aprovado!** Sou o seu **Mentor IA Especialista na FGV**.\n\nEstou configurado especificamente para as disciplinas de Tecnologia da Informação dos editais **SEPLAG-RJ** (APO TI) e **DATAPREV** (todos os perfis).\n\n💡 Você pode tirar dúvidas sobre qualquer matéria, pedir para desarmar pegadinhas de enunciados, simular perguntas da banca ou gerar mapas mentais rápidos. Como posso te apoiar nos seus estudos hoje?`,
+        content: `👋 **Olá, futuro aprovado em TI!** Sou o seu **Mentor IA Especialista em Concursos de TI**.\n\nFocado 100% nos editais e bancas de Tecnologia da Informação:\n- **SEPLAG-RJ** (FGV • Analista de Planejamento e Orçamento - TI)\n- **DATAPREV** (FGV • Analista de TI em todos os perfis)\n- **TRANSPETRO** (Cesgranrio • Profissional Transpetro TI)\n- **ABGF** (FCC • Analista de TI)\n\n💡 Você pode tirar dúvidas conceituais (COBIT, ITIL, DMBOK, ISO, Nuvem, Kubernetes, LGPD), desarmar pegadinhas ou transformar qualquer explicação minha em **Flashcard de revisão**. Como posso te apoiar agora?`,
         timestamp: new Date().toISOString(),
       },
     ];
@@ -146,6 +156,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [savedCardId, setSavedCardId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -191,32 +202,49 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
     scrollToBottom();
   }, [messages, isLoading]);
 
-  const handleSendMessage = async (textToSend?: string) => {
+  const handleSendMessage = async (
+    textToSend?: string,
+    retryFailedMessageId?: string,
+    overrideModel?: string
+  ) => {
     const text = (textToSend || inputText).trim();
     if (!text || isLoading) return;
 
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-      contextQuestion: contextQuestion
-        ? {
-            id: contextQuestion.id,
-            statement: contextQuestion.statement,
-            correctOptionId: contextQuestion.correctOptionId,
-          }
-        : undefined,
-    };
+    const activeModelToUse = overrideModel || selectedModel;
 
-    const newMessages = [...messages, userMessage];
+    // If retrying, filter out the failed error message
+    let baseMessages = messages;
+    if (retryFailedMessageId) {
+      baseMessages = messages.filter((m) => m.id !== retryFailedMessageId);
+    }
+
+    // Check if the user message is already the last message
+    const lastMsg = baseMessages[baseMessages.length - 1];
+    let newMessages = baseMessages;
+    if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== text) {
+      const userMessage: ChatMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        content: text,
+        timestamp: new Date().toISOString(),
+        contextQuestion: contextQuestion
+          ? {
+              id: contextQuestion.id,
+              statement: contextQuestion.statement,
+              correctOptionId: contextQuestion.correctOptionId,
+            }
+          : undefined,
+      };
+      newMessages = [...baseMessages, userMessage];
+    }
+
     setMessages(newMessages);
     setInputText('');
     setIsLoading(true);
 
     // Format messages for backend API
     const apiMessages = newMessages
-      .filter((m) => m.id !== 'welcome-msg')
+      .filter((m) => m.id !== 'welcome-msg' && !m.isError)
       .map((m) => ({
         role: m.role,
         content: m.content,
@@ -229,7 +257,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
         body: JSON.stringify({
           messages: apiMessages.length > 0 ? apiMessages : [{ role: 'user', content: text }],
           roleId: selectedPersona,
-          model: selectedModel,
+          model: activeModelToUse,
         }),
       });
 
@@ -237,11 +265,15 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
         let serverError = '';
         try {
           const errData = await response.json();
-          serverError = errData.details || errData.error || '';
+          serverError = errData.details || errData.error || errData.message || '';
         } catch {
           serverError = response.statusText;
         }
-        throw new Error(serverError || `Erro HTTP ${response.status}`);
+        const finalErrorMsg =
+          serverError && serverError.trim().length > 0
+            ? serverError
+            : `Erro no servidor de IA (Status HTTP ${response.status})`;
+        throw new Error(finalErrorMsg);
       }
 
       const data = await response.json();
@@ -256,13 +288,25 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
       setMessages((prev) => [...prev, modelReply]);
     } catch (error: any) {
       console.error('Chat error:', error);
-      const isDemand = String(error?.message || '').includes('503') || String(error?.message || '').includes('demand');
+      const rawError = String(error?.message || '').trim();
+      const isDemand =
+        rawError.includes('503') ||
+        rawError.toLowerCase().includes('demand') ||
+        rawError.toLowerCase().includes('unavailable');
+      const safeErrorDetails =
+        rawError && rawError.length > 0
+          ? rawError
+          : 'O servidor de inteligência artificial não respondeu a tempo.';
+
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'model',
+        isError: true,
+        canRetry: true,
+        failedUserMessage: text,
         content: isDemand
-          ? `⚠️ **Alta demanda momentânea no modelo de IA (503)**\n\nOs servidores da Gemini estão passando por um pico temporário de requisições.\n\n💡 **Dica rápida:** Alterne para o modelo **\`gemini-3.1-flash-lite\`** no seletor acima ou reenvie sua pergunta em alguns instantes.`
-          : `⚠️ **Não foi possível obter resposta no momento**\n\n*Detalhes:* ${error?.message || 'Falha de comunicação com o servidor'}.\n\nPor favor, tente novamente em instantes ou alterne para o modelo **gemini-3.1-flash-lite**.`,
+          ? `⚠️ **Alta demanda momentânea no modelo de IA (503)**\n\nOs servidores da Gemini estão passando por um pico temporário de requisições globais.\n\n💡 Você pode clicar no botão **"Reenviar mensagem"** para retentar agora, ou alternar para o modelo **\`gemini-3.1-flash-lite\`** que possui resposta imediata.`
+          : `⚠️ **Não foi possível obter resposta no momento**\n\n*Detalhes:* ${safeErrorDetails}.\n\nClique em **"Reenviar mensagem"** abaixo para uma nova tentativa imediata.`,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -272,6 +316,42 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
         onClearContextQuestion();
       }
     }
+  };
+
+  const handleRetry = (failedMessageId: string, userPrompt?: string, modelOverride?: string) => {
+    let promptToUse = userPrompt;
+    if (!promptToUse) {
+      const lastUser = [...messages].reverse().find((m) => m.role === 'user');
+      promptToUse = lastUser ? lastUser.content : '';
+    }
+    if (promptToUse) {
+      handleSendMessage(promptToUse, failedMessageId, modelOverride);
+    }
+  };
+
+  const handleCreateFlashcardFromMessage = (message: ChatMessage, idx: number) => {
+    if (!onCreateFlashcard) return;
+
+    let frontQuestion = 'Conceito Explicado pelo Mentor IA';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        frontQuestion = messages[i].content;
+        break;
+      }
+    }
+
+    onCreateFlashcard({
+      front: frontQuestion,
+      back: message.content,
+      tags: ['Mentor IA', 'Revisão Rápida', 'Concurso TI'],
+      source: 'mentor',
+      subjectName: contextQuestion?.subjectName || 'Tecnologia da Informação',
+    });
+
+    setSavedCardId(message.id);
+    setTimeout(() => {
+      setSavedCardId(null);
+    }, 3000);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -450,16 +530,25 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
                 className={`group relative max-w-[85%] sm:max-w-[78%] rounded-2xl p-4 shadow-xs text-sm ${
                   isUser
                     ? 'bg-sky-600 text-white rounded-tr-xs'
+                    : message.isError
+                    ? 'bg-rose-50/80 text-slate-900 border-2 border-rose-300 rounded-tl-xs'
                     : 'bg-white text-slate-900 border border-slate-200 rounded-tl-xs'
                 }`}
               >
                 {/* Header inside bubble */}
                 <div
                   className={`flex items-center justify-between gap-2 mb-1.5 text-[11px] font-semibold ${
-                    isUser ? 'text-sky-100' : 'text-slate-500'
+                    isUser
+                      ? 'text-sky-100'
+                      : message.isError
+                      ? 'text-rose-700'
+                      : 'text-slate-500'
                   }`}
                 >
-                  <span>{isUser ? 'Você' : activePersona.name}</span>
+                  <span className="flex items-center gap-1.5">
+                    {message.isError && <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />}
+                    {isUser ? 'Você' : activePersona.name}
+                  </span>
                   <div className="flex items-center gap-1.5">
                     <span className="opacity-75">
                       {new Date(message.timestamp).toLocaleTimeString([], {
@@ -467,18 +556,39 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
                         minute: '2-digit',
                       })}
                     </span>
-                    {!isUser && (
-                      <button
-                        onClick={() => handleCopyMessage(message.id, message.content)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-slate-900"
-                        title="Copiar resposta"
-                      >
-                        {copiedId === message.id ? (
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5" />
+                    {!isUser && !message.isError && (
+                      <>
+                        {onCreateFlashcard && message.id !== 'welcome-msg' && (
+                          <button
+                            type="button"
+                            onClick={() => handleCreateFlashcardFromMessage(message, idx)}
+                            className="p-1 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors flex items-center gap-1 text-[11px]"
+                            title="Transformar resposta em Flashcard"
+                          >
+                            {savedCardId === message.id ? (
+                              <span className="text-emerald-600 font-bold flex items-center gap-1">
+                                <Check className="w-3 h-3" /> Salvo!
+                              </span>
+                            ) : (
+                              <>
+                                <Layers className="w-3 h-3" />
+                                <span className="hidden sm:inline">Flashcard</span>
+                              </>
+                            )}
+                          </button>
                         )}
-                      </button>
+                        <button
+                          onClick={() => handleCopyMessage(message.id, message.content)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:text-slate-900"
+                          title="Copiar resposta"
+                        >
+                          {copiedId === message.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -495,6 +605,36 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
                     <Markdown>{message.content}</Markdown>
                   </div>
                 </div>
+
+                {/* Direct Retry Action on Failed Messages */}
+                {message.isError && (
+                  <div className="mt-3 pt-3 border-t border-rose-200/80 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleRetry(message.id, message.failedUserMessage)}
+                      disabled={isLoading}
+                      className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      Reenviar mensagem
+                    </button>
+
+                    {selectedModel !== 'gemini-3.1-flash-lite' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedModel('gemini-3.1-flash-lite');
+                          handleRetry(message.id, message.failedUserMessage, 'gemini-3.1-flash-lite');
+                        }}
+                        disabled={isLoading}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        <Zap className="w-3.5 h-3.5 text-amber-500" />
+                        Tentar com Flash Lite
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
