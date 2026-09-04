@@ -137,6 +137,7 @@ export default function App() {
     count: number;
     useAi: boolean;
     difficulty: 'Médio' | 'Difícil';
+    focusDistractors?: boolean;
   }) => {
     setCurrentSimuladoMode(config.mode);
     setIsLoadingAi(true);
@@ -157,6 +158,7 @@ export default function App() {
             format: config.format,
             count: config.count,
             difficulty: config.difficulty,
+            focusDistractors: config.focusDistractors ?? true,
           }),
         });
 
@@ -234,6 +236,12 @@ export default function App() {
       item.percentage = Math.round((item.correct / item.total) * 100);
     });
 
+    const avgTimePerQuestionSeconds =
+      currentQuestions.length > 0
+        ? Math.round(totalTimeSeconds / currentQuestions.length)
+        : 0;
+    const bottleneckCount = answers.filter((a) => (a.timeSpentSeconds || 0) > 180).length;
+
     const newSession: SimuladoSession = {
       id: `session-${Date.now()}`,
       date: new Date().toLocaleDateString('pt-BR', {
@@ -250,6 +258,8 @@ export default function App() {
       correctCount,
       scorePercentage,
       totalTimeSeconds,
+      avgTimePerQuestionSeconds,
+      bottleneckCount,
       answers,
       questions: currentQuestions,
       subjectBreakdown,

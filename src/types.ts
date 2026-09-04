@@ -56,6 +56,7 @@ export interface Question {
   distractorExplanations?: Record<string, string>; // Por que as outras estão erradas
   syllabusCitation: string; // Citação exata do tópico do edital
   isAiGenerated?: boolean;
+  focusDistractors?: boolean; // Se a questão foi gerada ou identificada com pegadinhas/distratores avançados FGV
 }
 
 export interface UserAnswer {
@@ -83,6 +84,9 @@ export interface SimuladoSession {
   correctCount: number;
   scorePercentage: number;
   totalTimeSeconds: number;
+  avgTimePerQuestionSeconds?: number;
+  bottleneckCount?: number; // Questões com tempo > 3 min (180 segundos)
+  focusDistractors?: boolean;
   answers: UserAnswer[];
   questions: Question[];
   subjectBreakdown: Record<string, SubjectPerformance>;

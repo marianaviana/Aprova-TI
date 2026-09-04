@@ -73,6 +73,7 @@ app.post("/api/generate-questions", async (req, res) => {
     format = "multipla_escolha",
     count = 5,
     difficulty = "Difícil",
+    focusDistractors = false,
   } = req.body;
 
   const targetExam = EXAMS_INFO[examId] || EXAMS_INFO.seplag;
@@ -124,11 +125,20 @@ app.post("/api/generate-questions", async (req, res) => {
   }
 
   try {
+    const distractorsDirective = focusDistractors
+      ? `\n\n🎯 MODO FOCO EM DISTRATORES E PEGADINHAS FGV ATIVADO:
+- Elabore enunciados densos e alternativas extensas com as armadilhas conceituais clássicas da banca FGV.
+- Realize trocas finas e verossímeis de conceitos em normas e frameworks (ex.: inverter papéis de Governança vs Gestão no COBIT 2019; confundir Práticas e Processos ou Princípios Orientadores no ITIL 4; trocar dimensões ou fases de maturidade no DMBOK; trocar competências de Controlador, Operador e Encarregado/DPO na LGPD; inverter camadas de segurança ISO/IEC 27001/27002; trocar métricas de engenharia de software e padrões de microsserviços/nuvem).
+- Empregue termos "quase certos" (afirmativas 90-95% corretas na leitura rápida, porém com uma única palavra ou premissa sutilmente falseada).
+- No campo "justification", desmonte explicitamente a armadilha do examinador FGV e explique detalhadamente por que cada distrator parece atrativo mas está incorreto.`
+      : '';
+
     const prompt = `Você é o examinador sênior da banca Fundação Getulio Vargas (FGV Conhecimento) para concursos de alto nível na área de Tecnologia da Informação (${targetExam.name} - ${targetExam.role}).
 Gere exatamente ${numQuestions} questões INÉDITAS e de alta complexidade técnica sobre o conteúdo programático oficial dos editais anexados.
 
 FORMATO REQUISITADO: ${isTrueFalse ? "CERTO ou ERRADO (estilo julgamento de assertiva técnica com fundamentação)" : "MÚLTIPLA ESCOLHA com exatamente 5 alternativas (A, B, C, D, E)"}.
 NÍVEL DE DIFICULDADE: ${difficulty} (Padrão FGV de prova de elite: cenários de casos práticos, tomada de decisão em governança/arquitetura/engenharia de dados, distratores sutis e inteligentes).
+${distractorsDirective}
 
 CONTEÚDO PROGRAMÁTICO DE REFERÊNCIA:
 ${subjectsSummary}
@@ -219,6 +229,7 @@ REQUISITOS OBRIGATÓRIOS PARA CADA QUESTÃO:
       justification: item.justification,
       syllabusCitation: item.syllabusCitation,
       isAiGenerated: true,
+      focusDistractors: !!focusDistractors,
     }));
 
     res.json({

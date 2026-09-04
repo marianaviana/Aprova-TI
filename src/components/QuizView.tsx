@@ -15,6 +15,9 @@ import {
   Share2,
   ChevronDown,
   ChevronUp,
+  Timer,
+  Target,
+  Keyboard,
 } from 'lucide-react';
 import { Question, QuestionFormat, SimuladoMode, UserAnswer } from '../types';
 import { AiTutorModal } from './AiTutorModal';
@@ -42,13 +45,16 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [questionTimeMap, setQuestionTimeMap] = useState<Record<string, number>>({});
+  const [isRiscadorMode, setIsRiscadorMode] = useState<boolean>(false);
 
   const currentQuestion = questions[currentIndex];
   const isTreino = mode === 'treino';
   const isCurrentConfirmed = !!confirmedQuestions[currentQuestion.id];
   const currentSelectedOption = selectedAnswers[currentQuestion.id];
+  const currentQuestionTime = questionTimeMap[currentQuestion.id] || 0;
+  const isBottleneck = currentQuestionTime >= 180;
 
-  // Timer
+  // Timer: total exam time + individual per-question time
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1);
@@ -76,19 +82,32 @@ export const QuizView: React.FC<QuizViewProps> = ({
     }));
   };
 
-  const handleToggleEliminate = (e: React.MouseEvent, optionId: string) => {
-    e.stopPropagation();
+  const toggleEliminateId = (optionId: string) => {
+    if (isTreino && isCurrentConfirmed) return;
     const currentList = eliminatedOptions[currentQuestion.id] || [];
     if (currentList.includes(optionId)) {
-      setEliminatedOptions({
-        ...eliminatedOptions,
+      setEliminatedOptions((prev) => ({
+        ...prev,
         [currentQuestion.id]: currentList.filter((id) => id !== optionId),
-      });
+      }));
     } else {
-      setEliminatedOptions({
-        ...eliminatedOptions,
+      setEliminatedOptions((prev) => ({
+        ...prev,
         [currentQuestion.id]: [...currentList, optionId],
-      });
+      }));
+    }
+  };
+
+  const handleToggleEliminate = (e: React.MouseEvent, optionId: string) => {
+    e.stopPropagation();
+    toggleEliminateId(optionId);
+  };
+
+  const handleOptionClick = (optionId: string) => {
+    if (isRiscadorMode) {
+      toggleEliminateId(optionId);
+    } else {
+      handleSelectOption(optionId);
     }
   };
 
@@ -99,6 +118,81 @@ export const QuizView: React.FC<QuizViewProps> = ({
       [currentQuestion.id]: true,
     }));
   };
+
+  // Keyboard Shortcuts Listener (A-E select, Space/Right arrow advance/confirm, R toggle riscador, Left arrow previous)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore when AI modal is open or user is typing in form controls
+      if (isAiModalOpen) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+
+      // Tecla R: Ativa/desativa o riscador de alternativas
+      if (key === 'R') {
+        e.preventDefault();
+        setIsRiscadorMode((prev) => !prev);
+        return;
+      }
+
+      // Teclas A, B, C, D, E: Selecionam as opções correspondentes (ou eliminam se modo riscador ativo)
+      const validOptionKeys =
+        currentQuestion.format === 'certo_errado'
+          ? ['C', 'E']
+          : ['A', 'B', 'C', 'D', 'E'];
+
+      if (validOptionKeys.includes(key)) {
+        e.preventDefault();
+        if (isRiscadorMode) {
+          toggleEliminateId(key);
+        } else {
+          handleSelectOption(key);
+        }
+        return;
+      }
+
+      // Tecla Espaço ou Seta para a Direita: Avança para a próxima ou confirma a resposta
+      if (e.key === ' ' || e.key === 'Spacebar' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        if (isTreino && !isCurrentConfirmed && currentSelectedOption) {
+          handleConfirmAnswer();
+        } else if (currentIndex < questions.length - 1) {
+          setCurrentIndex((prev) => prev + 1);
+        }
+        return;
+      }
+
+      // Tecla Seta para a Esquerda: Retorna para a questão anterior
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          setCurrentIndex((prev) => prev - 1);
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    currentQuestion,
+    isTreino,
+    isCurrentConfirmed,
+    currentSelectedOption,
+    currentIndex,
+    questions.length,
+    isAiModalOpen,
+    isRiscadorMode,
+    eliminatedOptions,
+  ]);
 
   const toggleFlag = () => {
     setFlaggedQuestions((prev) => ({
@@ -149,12 +243,64 @@ export const QuizView: React.FC<QuizViewProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {/* Timer */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-mono text-xs font-semibold">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {/* Cronômetro Individual por Questão */}
+            <div
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-mono text-xs font-semibold border transition-all ${
+                isBottleneck
+                  ? 'bg-amber-100 text-amber-900 border-amber-300 ring-2 ring-amber-400/40 animate-pulse'
+                  : currentQuestionTime >= 120
+                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                  : 'bg-sky-50 text-sky-800 border-sky-200'
+              }`}
+              title={
+                isBottleneck
+                  ? 'Alerta: Mais de 3 minutos gastos nesta questão!'
+                  : 'Tempo decorrido nesta questão'
+              }
+            >
+              <Timer className="w-3.5 h-3.5 text-sky-600" />
+              <span>Questão: {formatTime(currentQuestionTime)}</span>
+              {isBottleneck && (
+                <span className="px-1.5 py-0.2 rounded bg-amber-300 text-amber-950 text-[10px] font-extrabold uppercase">
+                  &gt; 3 min
+                </span>
+              )}
+            </div>
+
+            {/* Cronômetro Total da Prova */}
+            <div
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-mono text-xs font-semibold border border-slate-200"
+              title="Tempo total decorrido no simulado"
+            >
               <Clock className="w-3.5 h-3.5 text-slate-500" />
+              <span className="hidden sm:inline">Total:</span>
               <span>{formatTime(elapsedSeconds)}</span>
             </div>
+
+            {/* Riscador Toggle Button [Tecla R] */}
+            <button
+              type="button"
+              onClick={() => setIsRiscadorMode((prev) => !prev)}
+              className={`px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isRiscadorMode
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs ring-2 ring-amber-300'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+              }`}
+              title="Ativar/Desativar modo riscador de alternativas (Atalho: Tecla R)"
+            >
+              <Strikethrough className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Riscador</span>
+              <kbd
+                className={`px-1 rounded text-[10px] font-mono font-bold ${
+                  isRiscadorMode
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-100 text-slate-600 border border-slate-200'
+                }`}
+              >
+                R
+              </kbd>
+            </button>
 
             {/* Flag / Review button */}
             <button
@@ -167,7 +313,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
               title="Marcar questão para revisão"
             >
               <Flag className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dúvida</span>
+              <span className="hidden lg:inline">Dúvida</span>
             </button>
 
             {/* Finish button */}
@@ -233,9 +379,15 @@ export const QuizView: React.FC<QuizViewProps> = ({
           <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
             {currentQuestion.topicName}
           </span>
+          {currentQuestion.focusDistractors && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+              <Target className="w-3 h-3 text-indigo-600" />
+              Foco em Distratores FGV
+            </span>
+          )}
           {currentQuestion.isAiGenerated && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              <Sparkles className="w-3 h-3 text-indigo-600" />
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
+              <Sparkles className="w-3 h-3 text-sky-600" />
               Inédita FGV (IA)
             </span>
           )}
@@ -243,6 +395,32 @@ export const QuizView: React.FC<QuizViewProps> = ({
             {currentQuestion.format === 'certo_errado' ? 'Item Certo/Errado' : 'Múltipla Escolha (5 alternativas)'}
           </span>
         </div>
+
+        {/* Alerta de Gargalo de Tempo (> 3 minutos) */}
+        {isBottleneck && (
+          <div className="mb-5 p-3.5 rounded-xl bg-amber-50 border border-amber-300 flex items-start gap-2.5 text-xs text-amber-900 font-medium">
+            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <span className="font-bold">Alerta de Ritmo FGV (Gargalo de Tempo):</span> Você já consumiu {formatTime(currentQuestionTime)} nesta questão. Em provas da FGV com enunciados extensos, ultrapassar 3 minutos por questão costuma comprometer a resolução das demais e a transcrição do cartão-resposta.
+            </div>
+          </div>
+        )}
+
+        {/* Modo Riscador Banner Informativo quando ativo */}
+        {isRiscadorMode && (
+          <div className="mb-4 py-2 px-3 rounded-lg bg-amber-100/80 border border-amber-300 text-xs text-amber-900 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Strikethrough className="w-4 h-4 text-amber-700" />
+              <span><strong>Modo Riscador Ativo:</strong> Clique em qualquer alternativa ou tecle a letra correspondente para riscar/desriscar.</span>
+            </div>
+            <button
+              onClick={() => setIsRiscadorMode(false)}
+              className="text-[11px] underline text-amber-800 hover:text-amber-950 font-bold"
+            >
+              Desativar (R)
+            </button>
+          </div>
+        )}
 
         {/* Statement (Enunciado) */}
         <div className="prose prose-slate max-w-none mb-6">
@@ -276,10 +454,10 @@ export const QuizView: React.FC<QuizViewProps> = ({
             return (
               <div
                 key={option.id}
-                onClick={() => handleSelectOption(option.id)}
+                onClick={() => handleOptionClick(option.id)}
                 className={`relative group p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start gap-3.5 ${optionStyle} ${
-                  isCrossed ? 'opacity-40 line-through' : ''
-                }`}
+                  isCrossed ? 'opacity-40 line-through bg-slate-50' : ''
+                } ${isRiscadorMode ? 'hover:ring-2 hover:ring-amber-400' : ''}`}
               >
                 {/* Option Identifier Badge (A, B, C, D, E or C, E) */}
                 <div
@@ -316,8 +494,12 @@ export const QuizView: React.FC<QuizViewProps> = ({
                   <button
                     type="button"
                     onClick={(e) => handleToggleEliminate(e, option.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-all"
-                    title="Riscar alternativa que você considera errada"
+                    className={`p-1.5 rounded-lg transition-all ${
+                      isCrossed
+                        ? 'opacity-100 text-amber-700 bg-amber-100 hover:bg-amber-200'
+                        : 'opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60'
+                    }`}
+                    title={isCrossed ? 'Desfazer risco da alternativa' : 'Riscar alternativa (Atalho: R)'}
                   >
                     <Strikethrough className="w-4 h-4" />
                   </button>
@@ -370,6 +552,38 @@ export const QuizView: React.FC<QuizViewProps> = ({
               Tirar Dúvida com IA Gemini
             </button>
           )}
+        </div>
+
+        {/* Barra de Atalhos de Teclado */}
+        <div className="mt-4 pt-3.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5 text-[11px] text-slate-500">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1 text-slate-600 font-semibold">
+              <Keyboard className="w-3.5 h-3.5 text-slate-400" />
+              Atalhos de Prova:
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-[10px]">A-E</kbd>
+              <span>Selecionar</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-[10px]">Espaço</kbd>
+              <span>ou</span>
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-[10px]">→</kbd>
+              <span>{isTreino && !isCurrentConfirmed && currentSelectedOption ? 'Confirmar' : 'Avançar'}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-[10px]">←</kbd>
+              <span>Voltar</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <kbd className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-300 font-mono font-bold text-slate-700 text-[10px]">R</kbd>
+              <span>Riscador ({isRiscadorMode ? 'Ativo' : 'Inativo'})</span>
+            </span>
+          </div>
+
+          <div className="text-[10px] text-slate-400 font-medium">
+            Velocidade de resolução profissional FGV
+          </div>
         </div>
       </div>
 

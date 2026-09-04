@@ -13,6 +13,8 @@ import {
   Briefcase,
   Sliders,
   ShieldCheck,
+  Target,
+  AlertTriangle,
 } from 'lucide-react';
 import { ExamId, QuestionFormat, SimuladoMode } from '../types';
 import { EXAMS_INFO, SYLLABUS_DATA } from '../data/syllabusData';
@@ -29,6 +31,7 @@ interface SimuladoSetupProps {
     count: number;
     useAi: boolean;
     difficulty: 'Médio' | 'Difícil';
+    focusDistractors: boolean;
   }) => void;
   isLoadingAi: boolean;
 }
@@ -51,6 +54,7 @@ export const SimuladoSetup: React.FC<SimuladoSetupProps> = ({
   const [count, setCount] = useState<number>(5);
   const [useAi, setUseAi] = useState<boolean>(true);
   const [difficulty, setDifficulty] = useState<'Médio' | 'Difícil'>('Difícil');
+  const [focusDistractors, setFocusDistractors] = useState<boolean>(true);
 
   // Filter available subjects according to exam & profile
   const availableSubjects = SYLLABUS_DATA.filter((s) => {
@@ -83,6 +87,7 @@ export const SimuladoSetup: React.FC<SimuladoSetupProps> = ({
       count,
       useAi,
       difficulty,
+      focusDistractors,
     });
   };
 
@@ -457,6 +462,64 @@ export const SimuladoSetup: React.FC<SimuladoSetupProps> = ({
                     Carregamento instantâneo
                   </div>
                 </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Filtro Especial: Modo Foco em Distratores FGV */}
+          <div className="pt-2 border-t border-slate-100">
+            <div
+              onClick={() => setFocusDistractors(!focusDistractors)}
+              className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex items-start justify-between gap-4 ${
+                focusDistractors
+                  ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-1 ring-indigo-500/30'
+                  : 'border-slate-200 bg-slate-50/60 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                    focusDistractors
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-200 text-slate-500'
+                  }`}
+                >
+                  <Target className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm font-bold text-slate-900">
+                      Modo Foco em Distratores FGV
+                    </span>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide ${
+                        focusDistractors
+                          ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                          : 'bg-slate-200 text-slate-600'
+                      }`}
+                    >
+                      {focusDistractors ? 'Ativado • Padrão FGV' : 'Desativado'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    Instrui a elaboração a forçar as armadilhas clássicas da FGV: troca sutil de conceitos em normas e frameworks (ex.: Governança vs Gestão no COBIT 2019, Práticas no ITIL 4, atribuições na LGPD e DMBOK), termos "quase certos" e alternativas extensas com alta densidade técnica.
+                  </p>
+                </div>
+              </div>
+
+              {/* Switch Toggle */}
+              <div className="pt-1 shrink-0">
+                <div
+                  className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                    focusDistractors ? 'bg-indigo-600' : 'bg-slate-300'
+                  }`}
+                >
+                  <div
+                    className={`w-5 h-5 rounded-full bg-white shadow-sm absolute top-0.5 transition-transform duration-200 ${
+                      focusDistractors ? 'left-5.5' : 'left-0.5'
+                    }`}
+                  />
+                </div>
               </div>
             </div>
           </div>

@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronUp,
+  Timer,
+  AlertTriangle,
+  Target,
 } from 'lucide-react';
 import { SimuladoSession, Question, UserAnswer, ExamId, SubjectPerformance } from '../types';
 import { EXAMS_INFO } from '../data/syllabusData';
@@ -80,11 +83,19 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
     return `${mins}m ${secs}s`;
   };
 
+  const totalQuestionsCount = Math.max(1, session.totalQuestions);
+  const avgSeconds =
+    session.avgTimePerQuestionSeconds ??
+    Math.round(session.totalTimeSeconds / totalQuestionsCount);
+  const bottleneckCount =
+    session.bottleneckCount ??
+    session.answers.filter((a) => (a.timeSpentSeconds || 0) > 180).length;
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
       {/* Overview Score Card */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-md mb-8">
-        <div className="text-center max-w-xl mx-auto">
+        <div className="text-center max-w-2xl mx-auto">
           <div
             className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4 ${
               isPassed
@@ -138,8 +149,8 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
             )}
           </div>
 
-          {/* Quick Metrics */}
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-slate-100 text-center">
+          {/* Gestão de Tempo FGV: Quick Metrics com Tempo Médio e Alerta de Gargalos */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-4 border-t border-slate-100 text-center">
             <div className="p-2">
               <span className="text-xs text-slate-500 block">Acertos</span>
               <span className="text-lg font-bold text-emerald-600">
@@ -158,8 +169,35 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
                 {formatMinutes(session.totalTimeSeconds)}
               </span>
             </div>
+            <div className="p-2 bg-slate-50 rounded-xl">
+              <span className="text-xs text-slate-500 block">Média / Questão</span>
+              <span className={`text-lg font-bold ${avgSeconds > 180 ? 'text-amber-600' : 'text-slate-800'}`}>
+                {formatMinutes(avgSeconds)}
+              </span>
+            </div>
+            <div className={`p-2 rounded-xl ${bottleneckCount > 0 ? 'bg-amber-50 border border-amber-200' : 'bg-slate-50'}`}>
+              <span className="text-xs text-slate-500 block">Gargalos (&gt; 3 min)</span>
+              <span className={`text-lg font-bold ${bottleneckCount > 0 ? 'text-amber-600' : 'text-slate-700'}`}>
+                {bottleneckCount}
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Alerta de Gargalo de Tempo por Questão */}
+        {bottleneckCount > 0 && (
+          <div className="mt-6 p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex items-start gap-3 text-xs sm:text-sm">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <div className="font-bold text-amber-900 mb-0.5">
+                Alerta de Ritmo de Prova: {bottleneckCount} {bottleneckCount === 1 ? 'questão exigiu' : 'questões exigiram'} mais de 3 minutos
+              </div>
+              <p className="text-amber-800 leading-relaxed">
+                A banca FGV elabora enunciados longos e distratores densos exatamente para induzir o candidato a estourar o tempo. Questões com mais de 3 minutos de resolução foram sinalizadas com a tag <strong>⚠️ Gargalo (&gt; 3 min)</strong> na revisão abaixo. Pratique o descarte rápido de alternativas falsas para manter a média de 2min30s.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-3">
@@ -278,6 +316,8 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
             const userAns = session.answers.find((a) => a.questionId === q.id);
             const isCorrect = !!userAns?.isCorrect;
             const isExpanded = expandedQuestions[q.id] !== false; // expanded by default
+            const qTimeSeconds = userAns?.timeSpentSeconds || 0;
+            const isQBottleneck = qTimeSeconds > 180;
 
             return (
               <div
@@ -320,6 +360,27 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
                         >
                           {isCorrect ? 'Você Acertou' : 'Você Errou'}
                         </span>
+
+                        {/* Tempo Gasto na Questão */}
+                        {isQBottleneck ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 inline-flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3 text-amber-600" />
+                            Gargalo ({formatMinutes(qTimeSeconds)})
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-700 inline-flex items-center gap-1">
+                            <Timer className="w-3 h-3 text-slate-500" />
+                            {formatMinutes(qTimeSeconds)}
+                          </span>
+                        )}
+
+                        {/* Tag Foco em Distratores FGV */}
+                        {q.focusDistractors && (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 inline-flex items-center gap-1">
+                            <Target className="w-3 h-3 text-indigo-600" />
+                            Distratores FGV
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs sm:text-sm text-slate-700 line-clamp-2">
                         {q.statement}
@@ -338,6 +399,16 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
                 {/* Expanded Details */}
                 {isExpanded && (
                   <div className="px-4 pb-5 sm:px-6 sm:pb-6 pt-2 border-t border-slate-200/60 space-y-4">
+                    {/* Alerta individual de tempo na questão */}
+                    {isQBottleneck && (
+                      <div className="p-3 rounded-xl bg-amber-50 border border-amber-300 text-xs text-amber-900 flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>
+                          <strong>Alerta de Tempo ({formatMinutes(qTimeSeconds)}):</strong> Esta questão levou mais de 3 minutos para ser resolvida. Em provas FGV, procure diagnosticar os termos-chave logo na primeira leitura para evitar relecturas excessivas.
+                        </span>
+                      </div>
+                    )}
+
                     {/* Full Statement */}
                     <p className="text-xs sm:text-sm text-slate-900 leading-relaxed whitespace-pre-line bg-white p-4 rounded-xl border border-slate-200">
                       {q.statement}
