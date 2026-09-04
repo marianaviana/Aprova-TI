@@ -70,7 +70,7 @@ const PERSONAS: Array<{
     name: 'Banca Examinadora FGV',
     badge: 'Desafio de Elite',
     tagline: 'Simula a arguição do examinador da FGV com casos práticos e desafios complexos de TI pública.',
-    recommendedModel: 'gemini-3.5-flash',
+    recommendedModel: 'gemini-3.8-flash',
     icon: ShieldAlert,
     accentColor: 'from-purple-600 to-indigo-700 text-purple-600 border-purple-200 bg-purple-50',
   },
@@ -234,7 +234,14 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
       });
 
       if (!response.ok) {
-        throw new Error(`Erro no servidor: ${response.statusText}`);
+        let serverError = '';
+        try {
+          const errData = await response.json();
+          serverError = errData.details || errData.error || '';
+        } catch {
+          serverError = response.statusText;
+        }
+        throw new Error(serverError || `Erro HTTP ${response.status}`);
       }
 
       const data = await response.json();
@@ -249,10 +256,13 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
       setMessages((prev) => [...prev, modelReply]);
     } catch (error: any) {
       console.error('Chat error:', error);
+      const isDemand = String(error?.message || '').includes('503') || String(error?.message || '').includes('demand');
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}`,
         role: 'model',
-        content: `⚠️ Não foi possível obter resposta do servidor no momento (${error?.message || 'Falha na requisição'}).\n\nVerifique se o backend está em execução e tente novamente em instantes.`,
+        content: isDemand
+          ? `⚠️ **Alta demanda momentânea no modelo de IA (503)**\n\nOs servidores da Gemini estão passando por um pico temporário de requisições.\n\n💡 **Dica rápida:** Alterne para o modelo **\`gemini-3.1-flash-lite\`** no seletor acima ou reenvie sua pergunta em alguns instantes.`
+          : `⚠️ **Não foi possível obter resposta no momento**\n\n*Detalhes:* ${error?.message || 'Falha de comunicação com o servidor'}.\n\nPor favor, tente novamente em instantes ou alterne para o modelo **gemini-3.1-flash-lite**.`,
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -386,9 +396,9 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({
             className="bg-white border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-800 font-medium focus:outline-none focus:ring-1 focus:ring-sky-500"
           >
             <option value="gemini-3.8-flash">gemini-3.8-flash (Padrão)</option>
-            <option value="gemini-3.5-flash">gemini-3.5-flash (Geral)</option>
-            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Rápido)</option>
-            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Complexo)</option>
+            <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite (Rápido / Menor Fila)</option>
+            <option value="gemini-flash-latest">gemini-flash-latest (Estável)</option>
+            <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview (Raciocínio Profundo)</option>
           </select>
         </div>
       </div>

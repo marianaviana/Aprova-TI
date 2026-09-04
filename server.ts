@@ -28,6 +28,58 @@ function getAiClient(): GoogleGenAI {
   return aiClient;
 }
 
+// Resilient Gemini Invocation with Exponential Backoff and Model Fallback
+interface GeminiCallOptions {
+  model: string;
+  fallbackModels?: string[];
+  contents: any;
+  config?: any;
+}
+
+async function callGeminiWithFallback(options: GeminiCallOptions): Promise<{ text: string; usedModel: string }> {
+  const { model, fallbackModels = [], contents, config } = options;
+  const candidateModels = [model, ...fallbackModels.filter((m) => m && m !== model)];
+
+  let lastError: any = null;
+
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await getAiClient().models.generateContent({
+          model: currentModel,
+          contents,
+          config,
+        });
+        const text = response.text || "";
+        return { text, usedModel: currentModel };
+      } catch (err: any) {
+        lastError = err;
+        const errMessage = String(err?.message || err || "");
+        const isTransient =
+          errMessage.includes("503") ||
+          errMessage.includes("UNAVAILABLE") ||
+          errMessage.includes("high demand") ||
+          errMessage.includes("429") ||
+          errMessage.includes("RESOURCE_EXHAUSTED");
+
+        console.warn(
+          `[Gemini Call] Model ${currentModel} (tentativa ${attempt + 1}) falhou: ${errMessage.slice(0, 160)}`
+        );
+
+        if (isTransient && attempt === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 800));
+          continue;
+        }
+        break;
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({
@@ -152,8 +204,9 @@ REQUISITOS OBRIGATÓRIOS PARA CADA QUESTÃO:
 6. "subjectName": Nome da disciplina.
 7. "topicName": Nome do tópico programático.`;
 
-    const response = await getAiClient().models.generateContent({
+    const { text, usedModel } = await callGeminiWithFallback({
       model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.1-flash-lite", "gemini-flash-latest"],
       contents: prompt,
       config: {
         responseMimeType: "application/json",
@@ -212,7 +265,7 @@ REQUISITOS OBRIGATÓRIOS PARA CADA QUESTÃO:
       },
     });
 
-    const parsed = JSON.parse(response.text || "[]");
+    const parsed = JSON.parse(text || "[]");
 
     const formattedQuestions = parsed.map((item: any, index: number) => ({
       id: `ai-gen-${Date.now()}-${index}`,
@@ -235,6 +288,7 @@ REQUISITOS OBRIGATÓRIOS PARA CADA QUESTÃO:
     res.json({
       success: true,
       fromCurated: false,
+      modelUsed: usedModel,
       questions: formattedQuestions,
     });
   } catch (error: any) {
@@ -264,7 +318,7 @@ app.post("/api/explain-question", async (req, res) => {
   }
 
   try {
-    const prompt = `Você é um professor mentor especialista em concursos públicos da banca FGV nas carreiras de TI.
+    const prompt = `Você é um professor mentor especialista em concursos públicos da área de Tecnologia da Informação (FGV, Cesgranrio, FCC).
 O aluno está respondendo à seguinte questão:
 
 ENUNCIADO:
@@ -278,17 +332,18 @@ JUSTIFICATIVA: ${question.justification}
 TÓPICO DO EDITAL: ${question.syllabusCitation}
 
 RESPOSTA DO ALUNO: ${userAnswer ? `Alternativa ${userAnswer}` : "Ainda não respondeu"}
-DÚVIDA ESPECÍFICA DO ALUNO: ${userQuery || "Explique em detalhes o conceito, as pegadinhas e como não errar questões desse tipo na FGV."}
+DÚVIDA ESPECÍFICA DO ALUNO: ${userQuery || "Explique em detalhes o conceito, as pegadinhas e como não errar questões desse tipo."}
 
-Responda de forma didática, clara, estruturada e motivadora, apontando exatamente o conceito-chave e o padrão de cobrança da banca FGV.`;
+Responda de forma didática, clara, estruturada e motivadora, apontando exatamente o conceito-chave e o padrão de cobrança da banca.`;
 
-    const response = await getAiClient().models.generateContent({
+    const { text } = await callGeminiWithFallback({
       model: "gemini-3.8-flash",
+      fallbackModels: ["gemini-3.1-flash-lite", "gemini-flash-latest"],
       contents: prompt,
     });
 
     res.json({
-      explanation: response.text,
+      explanation: text,
     });
   } catch (error: any) {
     console.error("Error explaining question:", error);
@@ -312,29 +367,29 @@ app.post("/api/chat", async (req, res) => {
 
   // System Instructions per Persona
   const systemInstructions: Record<string, string> = {
-    professor: `Você é o "Mentor Sênior Aprova-TI", um renomado professor especialista em Concursos Públicos de Tecnologia da Informação com foco exclusivo na banca Fundação Getulio Vargas (FGV Conhecimento) e nos editais SEPLAG-RJ (APO TI) e DATAPREV.
+    professor: `Você é o "Mentor Sênior Aprova-TI", um renomado professor especialista em Concursos Públicos de Tecnologia da Informação com foco nos editais SEPLAG-RJ (FGV), DATAPREV (FGV), TRANSPETRO (Cesgranrio) e ABGF (FCC).
 Seu papel:
-- Explicar com rigor técnico e didática impecável temas como Governança (COBIT 2019, ITIL 4, ISO 38500), Dados e Engenharia Analítica (DAMA-DMBOK v2, Data Lakehouse, Kimball vs Inmon, SQL/NoSQL), Segurança da Informação (ISO 27001/27002, Criptografia, Zero Trust), Engenharia de Software (GoF, Microsserviços, Clean Architecture, CI/CD, K8s) e Legislação (LGPD, Lei 14.133/2021).
-- Desmascarar como a FGV constrói seus distratores: trocas conceituais sutis, generalizações enganosas e termos quase certos.
+- Explicar com rigor técnico e didática impecável temas como Governança (COBIT 2019, ITIL 4, ISO 38500), Dados e Engenharia Analítica (DAMA-DMBOK v2, Data Lakehouse, SQL/NoSQL, Parquet, Spark), Cibersegurança e Redes (ISO 27001/27002, MITRE ATT&CK, NIST CSF 2.0, CIS Controls, BGP, OSPF, Criptografia), Cloud, DevOps e Microsserviços (Kubernetes, Docker, CI/CD, Ansible, Terraform) e Legislação de TIC (LGPD, Lei 14.133/2021, IN SGD/ME 94/2022).
+- Desmascarar as pegadinhas das bancas (FGV, Cesgranrio e FCC): trocas conceituais sutis, generalizações enganosas e termos quase certos.
 - Use formatação Markdown elegante (negrito, listas ordenadas, tabelas e trechos de código quando relevante).
 - Responda sempre em Português do Brasil com tom encorajador, estratégico e de altíssimo nível técnico.`,
 
-    recursos: `Você é o "Especialista em Recursos e Gabaritos FGV".
+    recursos: `Você é o "Especialista em Recursos e Gabaritos de TI (FGV, Cesgranrio, FCC)".
 Seu papel:
-- Analisar minuciosamente questões de concursos da FGV com foco na redação de recursos administrativos sólidos, identificação de duplicidade de gabarito, contradições com normas oficiais (ex.: COBIT 2019, ITIL 4, DMBOK, ISO/IEC, Lei 14.133/2021, LGPD) ou extrapolação do edital.
-- Apresentar a fundamentação com citações literais das normas, autores consagrados (Pressman, Tanenbaum, Date, Kimball, Silberschatz) e precedentes do TCU/jurisprudência.
+- Analisar minuciosamente questões de concursos de TI com foco na redação de recursos administrativos sólidos, identificação de duplicidade de gabarito, contradições com normas oficiais (ex.: COBIT 2019, ITIL 4, DMBOK, ISO/IEC, NIST CSF, Lei 14.133/2021, LGPD) ou extrapolação do edital.
+- Apresentar a fundamentação com citações literais das normas, autores consagrados (Pressman, Tanenbaum, Date, Kimball, Silberschatz) e jurisprudência do TCU.
 - Estruturar respostas no modelo clássico de recurso: 1. Síntese do Enunciado e Gabarito Preliminar; 2. Fatos e Fundamentação Técnica; 3. Pedido Conclusivo (Anulação ou Mudança de Gabarito).`,
 
-    flash_lite: `Você é o "Treinador Flash Aprova-TI" (Modo Rápido).
+    flash_lite: `Você é o "Treinador Flash Aprova-TI" (Modo Rápido & Objetivo).
 Seu papel:
 - Fornecer respostas diretas, ultra concisas e no formato de cartões de memorização (flashcards), resumos mnemônicos e mapas mentais rápidos.
-- Sem rodeios nem introduções prolixas: vá direto ao ponto técnico que cai na prova da FGV.
+- Sem rodeios nem introduções prolixas: vá direto ao ponto técnico que cai nas provas da FGV, Cesgranrio e FCC.
 - Ideal para revisões de última hora e fixação rápida de conceitos técnicos.`,
 
-    examinador_pro: `Você é a "Banca Examinadora FGV (Modo Desafio de Elite)".
+    examinador_pro: `Você é a "Banca Examinadora de TI (Modo Desafio de Elite)".
 Seu papel:
-- Agir como o examinador da FGV: questionar o candidato com casos práticos complexos de órgãos da Administração Pública, propor cenários de tomada de decisão e testar se o aluno realmente domina a aplicação prática ou se apenas memorizou conceitos.
-- Desafie o candidato, aponte imediatamente onde o raciocínio dele é fraco e simule a pressão intelectual de uma prova discursiva ou de alto nível técnico da FGV.`,
+- Agir como o examinador da banca: questionar o candidato com casos práticos complexos de órgãos da Administração Pública e estatais, propor cenários de tomada de decisão e testar se o aluno realmente domina a aplicação prática ou se apenas memorizou conceitos.
+- Desafie o candidato, aponte imediatamente onde o raciocínio dele é fraco e simule a pressão intelectual de uma prova de alto nível técnico.`,
   };
 
   const selectedInstruction =
@@ -360,23 +415,49 @@ Seu papel:
       parts: [{ text: String(m.content || "") }],
     }));
 
-    const response = await getAiClient().models.generateContent({
+    // Fallback models priority queue
+    const fallbackList = [
+      "gemini-3.1-flash-lite",
+      "gemini-3.8-flash",
+      "gemini-flash-latest",
+    ].filter((m) => m !== targetModel);
+
+    const { text, usedModel } = await callGeminiWithFallback({
       model: targetModel,
+      fallbackModels: fallbackList,
       contents,
       config: {
         systemInstruction: selectedInstruction,
       },
     });
 
-    const replyText = response.text || "Sem resposta gerada pelo modelo.";
+    const replyText = text || "Sem resposta gerada pelo modelo.";
 
     res.json({
       reply: replyText,
-      model: targetModel,
+      model: usedModel,
       roleId,
     });
   } catch (error: any) {
     console.error("Error in Gemini Chatbot:", error);
+    const errStr = String(error?.message || error || "");
+    const isHighDemand =
+      errStr.includes("503") ||
+      errStr.includes("UNAVAILABLE") ||
+      errStr.includes("high demand") ||
+      errStr.includes("429") ||
+      errStr.includes("RESOURCE_EXHAUSTED");
+
+    if (isHighDemand) {
+      // Graceful high-demand fallback response so user is never blocked
+      return res.json({
+        reply: `⚠️ **Aviso de Alta Demanda Temporária nos Servidores Gemini (Status 503)**\n\nO serviço de inteligência artificial está enfrentando um pico de acessos globais neste instante.\n\nTentamos a recuperação automática alternando entre os modelos disponíveis (\`gemini-3.8-flash\`, \`gemini-3.1-flash-lite\`), mas a fila de processamento permanece momentaneamente sobrecarregada.\n\n💡 **Dicas para continuar:**\n1. Aguarde alguns segundos e envie sua mensagem novamente.\n2. Alterne para o modelo **\`gemini-3.1-flash-lite\`** no menu superior (geralmente tem tempo de resposta mais rápido e menor fila).\n3. Você também pode continuar praticando pelo **Simulado**, que conta com centenas de questões catalogadas com gabaritos fundamentados!`,
+        model: "contingencia-offline",
+        roleId,
+        isHighDemand: true,
+      });
+    }
+
     res.status(500).json({
       error: "Falha ao processar mensagem com Gemini IA.",
       details: error?.message || String(error),
