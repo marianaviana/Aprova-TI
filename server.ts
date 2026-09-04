@@ -298,6 +298,92 @@ Responda de forma didática, clara, estruturada e motivadora, apontando exatamen
   }
 });
 
+// Multi-turn Gemini Chatbot Endpoint
+app.post("/api/chat", async (req, res) => {
+  const {
+    messages = [],
+    roleId = "professor",
+    model = "gemini-3.8-flash",
+  } = req.body;
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: "Mensagens não informadas." });
+  }
+
+  // System Instructions per Persona
+  const systemInstructions: Record<string, string> = {
+    professor: `Você é o "Mentor Sênior Aprova-TI", um renomado professor especialista em Concursos Públicos de Tecnologia da Informação com foco exclusivo na banca Fundação Getulio Vargas (FGV Conhecimento) e nos editais SEPLAG-RJ (APO TI) e DATAPREV.
+Seu papel:
+- Explicar com rigor técnico e didática impecável temas como Governança (COBIT 2019, ITIL 4, ISO 38500), Dados e Engenharia Analítica (DAMA-DMBOK v2, Data Lakehouse, Kimball vs Inmon, SQL/NoSQL), Segurança da Informação (ISO 27001/27002, Criptografia, Zero Trust), Engenharia de Software (GoF, Microsserviços, Clean Architecture, CI/CD, K8s) e Legislação (LGPD, Lei 14.133/2021).
+- Desmascarar como a FGV constrói seus distratores: trocas conceituais sutis, generalizações enganosas e termos quase certos.
+- Use formatação Markdown elegante (negrito, listas ordenadas, tabelas e trechos de código quando relevante).
+- Responda sempre em Português do Brasil com tom encorajador, estratégico e de altíssimo nível técnico.`,
+
+    recursos: `Você é o "Especialista em Recursos e Gabaritos FGV".
+Seu papel:
+- Analisar minuciosamente questões de concursos da FGV com foco na redação de recursos administrativos sólidos, identificação de duplicidade de gabarito, contradições com normas oficiais (ex.: COBIT 2019, ITIL 4, DMBOK, ISO/IEC, Lei 14.133/2021, LGPD) ou extrapolação do edital.
+- Apresentar a fundamentação com citações literais das normas, autores consagrados (Pressman, Tanenbaum, Date, Kimball, Silberschatz) e precedentes do TCU/jurisprudência.
+- Estruturar respostas no modelo clássico de recurso: 1. Síntese do Enunciado e Gabarito Preliminar; 2. Fatos e Fundamentação Técnica; 3. Pedido Conclusivo (Anulação ou Mudança de Gabarito).`,
+
+    flash_lite: `Você é o "Treinador Flash Aprova-TI" (Modo Rápido).
+Seu papel:
+- Fornecer respostas diretas, ultra concisas e no formato de cartões de memorização (flashcards), resumos mnemônicos e mapas mentais rápidos.
+- Sem rodeios nem introduções prolixas: vá direto ao ponto técnico que cai na prova da FGV.
+- Ideal para revisões de última hora e fixação rápida de conceitos técnicos.`,
+
+    examinador_pro: `Você é a "Banca Examinadora FGV (Modo Desafio de Elite)".
+Seu papel:
+- Agir como o examinador da FGV: questionar o candidato com casos práticos complexos de órgãos da Administração Pública, propor cenários de tomada de decisão e testar se o aluno realmente domina a aplicação prática ou se apenas memorizou conceitos.
+- Desafie o candidato, aponte imediatamente onde o raciocínio dele é fraco e simule a pressão intelectual de uma prova discursiva ou de alto nível técnico da FGV.`,
+  };
+
+  const selectedInstruction =
+    systemInstructions[roleId] || systemInstructions.professor;
+
+  // Selected target model
+  let targetModel = model || "gemini-3.8-flash";
+  if (roleId === "flash_lite" && (!req.body.model || req.body.model === "gemini-3.8-flash")) {
+    targetModel = "gemini-3.1-flash-lite";
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({
+      reply: `**[Modo Demonstração Offline]**\n\nPara interações em tempo real com o motor Gemini (${targetModel}), configure a variável de ambiente \`GEMINI_API_KEY\` no painel de Secrets.\n\nEnquanto isso, você pode explorar todas as centenas de questões e explicações comentadas já catalogadas no banco oficial!`,
+      model: targetModel,
+      roleId,
+    });
+  }
+
+  try {
+    const contents = messages.map((m: any) => ({
+      role: m.role === "user" ? "user" : "model",
+      parts: [{ text: String(m.content || "") }],
+    }));
+
+    const response = await getAiClient().models.generateContent({
+      model: targetModel,
+      contents,
+      config: {
+        systemInstruction: selectedInstruction,
+      },
+    });
+
+    const replyText = response.text || "Sem resposta gerada pelo modelo.";
+
+    res.json({
+      reply: replyText,
+      model: targetModel,
+      roleId,
+    });
+  } catch (error: any) {
+    console.error("Error in Gemini Chatbot:", error);
+    res.status(500).json({
+      error: "Falha ao processar mensagem com Gemini IA.",
+      details: error?.message || String(error),
+    });
+  }
+});
+
 // Vite Middleware Setup
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {

@@ -57,6 +57,79 @@ export const EXAMS_INFO: Record<string, ExamInfo> = {
       },
     ],
   },
+  transpetro: {
+    id: 'transpetro',
+    name: 'TRANSPETRO (Edital 2026.4)',
+    shortName: 'TRANSPETRO',
+    organ: 'Petrobras Transporte S.A.',
+    banca: 'Fundação Cesgranrio',
+    year: 2026,
+    role: 'Profissional Transpetro de Nível Superior - TI',
+    totalQuestionsEdital: 70,
+    minApprovalPercentage: 50,
+    discursiveInfo: 'Prova Objetiva (70 questões: 50 Conhecimentos Específicos de TI + 20 Básicas). Eliminação com menos de 50% na fase específica.',
+    profiles: [
+      {
+        id: 'enfase_4_infra',
+        name: 'Ênfase 4: Análise de Sistemas – Infraestrutura',
+        description: 'Redes TCP/IP, Linux/Windows, Storage NAS/SAN, Containers/K8s, DevOps, Cloud, ITIL 4, Segurança da Informação, Java e Bancos de Dados',
+      },
+      {
+        id: 'enfase_7_seguranca',
+        name: 'Ênfase 7: Análise de Sistemas – Segurança Cibernética e da Informação',
+        description: 'Segurança Ofensiva/Defensiva, MITRE ATT&CK/CAPEC, OWASP Top 10, Ferramentas de Hacking, ISO 27001/27002, NIST CSF 2.0, CIS Controls 8.1, Forense e LGPD',
+      },
+      {
+        id: 'enfase_8_dados',
+        name: 'Ênfase 8: Ciência de Dados',
+        description: 'Bases de Dados, Big Data (Spark/Hadoop/Parquet), CRISP-DM, Machine Learning, Deep Learning, NLP/Transformers/LLMs, Python, Power BI e Governança DMBOK',
+      },
+      {
+        id: 'enfase_5_negocios',
+        name: 'Ênfase 5: Análise de Sistemas – Processos de Negócios',
+        description: 'Arquitetura de Dados, NoSQL, Data Lake, Scrum/Kanban, SAFe, PMBOK 7ª, Engenharia de Software, UX/UI, BI, OLAP e LGPD',
+      },
+      {
+        id: 'enfase_6_sap',
+        name: 'Ênfase 6: Análise de Sistemas – SAP',
+        description: 'SAP-ERP (FI, CO, MM, SD, HCM), SAP-BI, BPMN 2.0, UML 2.5.1, Engenharia de Software, Data Warehouse e Gestão Ágil',
+      },
+    ],
+  },
+  abgf: {
+    id: 'abgf',
+    name: 'ABGF (Edital 01/2026)',
+    shortName: 'ABGF',
+    organ: 'Agência Brasileira Gestora de Fundos Garantidores e Garantias',
+    banca: 'Fundação Carlos Chagas (FCC)',
+    year: 2026,
+    role: 'Analista de TI (Cargo E05 - Nível Superior)',
+    totalQuestionsEdital: 60,
+    minApprovalPercentage: 50,
+    discursiveInfo: '40 Questões Específicas de TI (peso 3) + 20 Gerais (peso 1) + Prova Discursiva de Redação (20 a 30 linhas)',
+    profiles: [
+      {
+        id: 'abgf_dev_devops',
+        name: 'E05-A: Front-End / Back-End / DevOps',
+        description: 'Engenharia de Software, Padrões GoF/DDD, Microsserviços, APIs REST, Testes automatizados, CI/CD, Docker/K8s, Git, Java, Python, JavaScript, Ansible',
+      },
+      {
+        id: 'abgf_seguranca_dados',
+        name: 'E05-C: Análise e Segurança de Dados',
+        description: 'Segurança da Informação, Cibersegurança, Princípios CID, OWASP Top 10, Criptografia, ICP-Brasil, LGPD, Big Data, Backup e Continuidade',
+      },
+      {
+        id: 'abgf_infra_redes',
+        name: 'E05-B: Infraestrutura e Redes',
+        description: 'Sistemas Operacionais Windows/Linux, Redes TCP/IP, VLAN, VPN, Wi-Fi, Storage SAN/NAS, Virtualização, Zabbix, Prometheus, Grafana, Elasticsearch',
+      },
+      {
+        id: 'abgf_dados_ia',
+        name: 'E05-D: Análise de Dados e IA',
+        description: 'SGBDs Relacionais e NoSQL, SQL ANSI, Data Warehouse, Data Lakehouse, ETL/ELT, Aprendizado de Máquina, IA Generativa, LLMs, MLOps e Power BI',
+      },
+    ],
+  },
 };
 
 export const SYLLABUS_DATA: SyllabusSubject[] = [
@@ -523,6 +596,258 @@ export const SYLLABUS_DATA: SyllabusSubject[] = [
           'Conceitos de Inteligência Artificial e Aprendizado de Máquina',
           'Introdução aos modelos generativos e Large Language Models (LLMs)',
           'Ética, governança, privacidade e transparência em soluções de IA',
+        ],
+      },
+    ],
+  },
+
+  // ========================== TRANSPETRO (CESGRANRIO) ==========================
+  {
+    id: 'transpetro_infra_redes',
+    name: 'Redes de Computadores e Sistemas Operacionais (Cesgranrio)',
+    examId: 'transpetro',
+    isSpecificKnowledge: true,
+    questionCountEdital: 15,
+    weight: 1,
+    topics: [
+      {
+        id: 'transpetro_redes_tcpip',
+        name: 'Redes de Computadores e Sistemas Distribuídos',
+        subtopics: [
+          'Arquiteturas de rede, topologias e equipamentos de conexão e transmissão',
+          'Modelo OSI da ISO e arquitetura TCP/IP; QoS',
+          'Nível de aplicação TCP/IP: DNS, FTP, NFS, TELNET, SMTP, HTTP/HTTPS, LDAP, DHCP, IPSEC, SSH, SNMP e NAT',
+          'Endereçamento e noções básicas de IPv6',
+        ],
+      },
+      {
+        id: 'transpetro_so_linux_windows',
+        name: 'Ambientes UNIX, LINUX e Microsoft Windows',
+        subtopics: [
+          'Linux: Instalação e suporte a TCP/IP, DHCP, DNS, NIS, CIFS, NFS e impressão em rede',
+          'Instalação e configuração do Servidor Web Apache e linguagens de script',
+          'Windows Server / 11: Active Directory, IIS, Terminal Services e integração com Linux',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'transpetro_seguranca_cibernetica',
+    name: 'Segurança Cibernética e da Informação (Cesgranrio)',
+    examId: 'transpetro',
+    isSpecificKnowledge: true,
+    questionCountEdital: 15,
+    weight: 1,
+    topics: [
+      {
+        id: 'transpetro_sec_ofensiva',
+        name: 'Segurança Ofensiva e Framework MITRE ATT&CK',
+        subtopics: [
+          'Ataques passivos e ativos (DDoS, SQL Injection, XSS, CSRF, Man-in-the-Middle, Spoofing)',
+          'Etapas do ataque: Footprinting, Varredura, Enumeração, Ganho de acesso e Escalação de privilégios',
+          'Malwares: Ransomware, Rootkit, Trojans, Spyware, Cryptojacking e Formjacking',
+          'MITRE ATT&CK: Matrizes, táticas, técnicas, procedimentos e mitigações; MITRE CAPEC',
+          'Ferramentas: nmap, wireshark, metasploit, burpsuite, mimikatz, hydra, john the ripper',
+        ],
+      },
+      {
+        id: 'transpetro_sec_defensiva',
+        name: 'Segurança Defensiva, Normas ISO e NIST CSF',
+        subtopics: [
+          'Defesa em profundidade: Firewall com estado, Proxy, IDS/IPS, WAF, EDR, SIEM e CASB',
+          'Criptografia simétrica e assimétrica, resumo de mensagem (hash), certificado digital e ICP-Brasil',
+          'Controle de acesso à rede: IEEE 802.1X, EAP, RADIUS, RBAC e ABAC',
+          'Normas e Controles: ABNT NBR ISO/IEC 27001:2022, ISO/IEC 27002:2022 e ISO 27005',
+          'NIST Cybersecurity Framework (CSF 2.0) e CIS Critical Security Controls v8.1',
+          'Legislação: LGPD (Lei 13.709/2018) e Marco Civil da Internet (Lei 12.965/2014)',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'transpetro_cloud_devops',
+    name: 'Cloud Computing, DevOps e Arquitetura de Contêineres (Cesgranrio)',
+    examId: 'transpetro',
+    isSpecificKnowledge: true,
+    questionCountEdital: 10,
+    weight: 1,
+    topics: [
+      {
+        id: 'transpetro_containers_k8s',
+        name: 'Virtualização, Contêineres e Microsserviços',
+        subtopics: [
+          'Storage corporativo: Arquiteturas NAS e SAN; tipos e níveis de virtualização',
+          'Contêineres Docker e orquestração com Kubernetes (K8s)',
+          'Arquitetura de Microsserviços: Componentes, orquestração e padrões de resiliência',
+          'DevOps e Infraestrutura como Código (IaC)',
+        ],
+      },
+      {
+        id: 'transpetro_nuvem_servicos',
+        name: 'Computação em Nuvem e Gerenciamento de Serviços de TI',
+        subtopics: [
+          'Conceitos de nuvem: IaaS, PaaS, SaaS; escalabilidade, elasticidade e alta disponibilidade',
+          'Regiões, zonas de disponibilidade e gestão de custos em nuvem',
+          'ITIL 4: Ciclo de vida e fundamentos em gerenciamento de serviços',
+          'COBIT: Governança e domínio de entrega de serviços de TI',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'transpetro_dados_ia',
+    name: 'Bancos de Dados, Big Data e Ciência de Dados (Cesgranrio)',
+    examId: 'transpetro',
+    isSpecificKnowledge: true,
+    questionCountEdital: 10,
+    weight: 1,
+    topics: [
+      {
+        id: 'transpetro_sgbd_sql',
+        name: 'Modelagem de Dados e SGBDs Relacionais/NoSQL',
+        subtopics: [
+          'Modelagem Entidade-Relacionamento e modelo Relacional; Normalização de dados',
+          'Transações de bancos de dados: Propriedades ACID e controle de concorrência',
+          'Linguagem SQL (DDL e DML), triggers e stored procedures',
+          'Bancos de dados NoSQL: Modelos chave-valor, documento, colunar e grafos',
+        ],
+      },
+      {
+        id: 'transpetro_bigdata_ml',
+        name: 'Big Data, Machine Learning, NLP e Governança DMBOK',
+        subtopics: [
+          'Estruturas de dados analíticos: Data Warehouse, Data Lake, Data Lakehouse e ferramentas Big Data (Spark, Hadoop, HDFS, Parquet)',
+          'Metodologia CRISP-DM, qualidade e preparação de dados; Feature Engineering',
+          'Modelos de Machine Learning: Regressão, Árvores de Decisão, Random Forest, XGBoost e Redes Neurais Profundas',
+          'Processamento de Linguagem Natural (NLP): Word Embeddings, Transformers e LLMs',
+          'Governança de Dados (DMBOK v2) e Governança/Ética em Inteligência Artificial',
+        ],
+      },
+    ],
+  },
+
+  // ========================== ABGF (CARLOS CHAGAS - FCC) ==========================
+  {
+    id: 'abgf_sistemas_redes',
+    name: 'Fundamentos de Sistemas, Redes e Estruturas de Dados (FCC)',
+    examId: 'abgf',
+    isSpecificKnowledge: true,
+    questionCountEdital: 10,
+    weight: 3,
+    topics: [
+      {
+        id: 'abgf_so_redes',
+        name: 'Sistemas Operacionais, Redes TCP/IP e Alta Disponibilidade',
+        subtopics: [
+          'Sistemas Operacionais: Gerenciamento de processos, memória, arquivos e I/O; Virtualização e Conteinerização',
+          'Redes de Computadores: Pilha TCP/IP, endereçamento IPv4/IPv6, protocolos de aplicação (DNS, HTTPS, SMTP, DHCP)',
+          'Segmentação: VLANs, VPNs, redes sem fio (padrões Wi-Fi IEEE 802.11 e segurança WPA3/Enterprise)',
+          'Computação Distribuída: Balanceamento de carga, tolerância a falhas e alta disponibilidade',
+        ],
+      },
+      {
+        id: 'abgf_estruturas_dados',
+        name: 'Algoritmos, Estruturas de Dados e Complexidade',
+        subtopics: [
+          'Complexidade de algoritmos (Notação Big-O: tempo e espaço)',
+          'Estruturas lineares: Listas encadeadas, pilhas e filas',
+          'Estruturas não lineares: Árvores binárias, árvores balanceadas (AVL, Red-Black) e grafos',
+          'Tabelas de dispersão (Hash tables) e algoritmos de ordenação (QuickSort, MergeSort, HeapSort)',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'abgf_engenharia_software_devops',
+    name: 'Engenharia de Software, Padrões de Projeto e DevOps (FCC)',
+    examId: 'abgf',
+    isSpecificKnowledge: true,
+    questionCountEdital: 12,
+    weight: 3,
+    topics: [
+      {
+        id: 'abgf_engenharia_patterns',
+        name: 'Ciclo de Vida, POO, Design Patterns GoF e DDD',
+        subtopics: [
+          'Ciclo de vida de desenvolvimento de software (SDLC) e engenharia de requisitos',
+          'Programação Orientada a Objetos: Classes, herança, polimorfismo, encapsulamento e injeção de dependências',
+          'Padrões de projeto GoF (Criacionais, Estruturais e Comportamentais) e Domain-Driven Design (DDD)',
+          'Arquiteturas: Microsserviços, arquitetura orientada a eventos, serverless, MVC e APIs RESTful',
+          'Testes de software: Unitários, de integração, carga/desempenho e testes automatizados (TDD/BDD)',
+        ],
+      },
+      {
+        id: 'abgf_devops_iac',
+        name: 'Cultura DevOps, DevSecOps, CI/CD e Infraestrutura como Código',
+        subtopics: [
+          'DevOps e DevSecOps: Princípios, integração contínua (CI) e entrega contínua (CD)',
+          'Versionamento de código: Git (estratégias Gitflow, trunk-based, branching e merging)',
+          'Infraestrutura como Código (IaC): Abordagens declarativas e imperativas; Ansible',
+          'Scripts de automação: Python, Bash e PowerShell; Orquestração com Docker e Kubernetes',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'abgf_banco_dados_ia',
+    name: 'Bancos de Dados, Big Data e Inteligência Artificial (FCC)',
+    examId: 'abgf',
+    isSpecificKnowledge: true,
+    questionCountEdital: 10,
+    weight: 3,
+    topics: [
+      {
+        id: 'abgf_sgbd_sql_dw',
+        name: 'Modelagem de Dados, SQL ANSI, NoSQL e Data Lakehouse',
+        subtopics: [
+          'Conceitos de SGBD: Modelo relacional, formas normais (1FN, 2FN, 3FN, BCNF), transações e concorrência MVCC',
+          'Linguagem SQL (ANSI): DDL, DML, junções, subconsultas, funções analíticas/Window Functions e índices',
+          'Bancos de dados NoSQL: Famílias de bancos (chave-valor, documentos, colunar e grafos)',
+          'Armazenamento analítico: Data Warehouse, Data Mart, Data Lake, Data Lakehouse e processos ETL/ELT',
+        ],
+      },
+      {
+        id: 'abgf_dados_ml_llm',
+        name: 'Ciência de Dados, Aprendizado de Máquina e IA Generativa',
+        subtopics: [
+          'Análise exploratória de dados e estatística aplicada (distribuições, correlação e regressão)',
+          'Aprendizado supervisionado (classificação/regressão) e não supervisionado (clustering e PCA)',
+          'Métricas de avaliação de modelos (acurácia, precisão, recall, F1-score e matriz de confusão)',
+          'Inteligência Artificial Generativa e LLMs: Conceitos, riscos, explicabilidade, governança e MLOps',
+          'Visualização de dados e dashboards com Microsoft Power BI e técnicas de storytelling',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'abgf_seguranca_governanca',
+    name: 'Cibersegurança, Governança e Gestão de TI (FCC)',
+    examId: 'abgf',
+    isSpecificKnowledge: true,
+    questionCountEdital: 8,
+    weight: 3,
+    topics: [
+      {
+        id: 'abgf_ciberseguranca',
+        name: 'Segurança da Informação, Criptografia e Frameworks',
+        subtopics: [
+          'Princípios CID (Confidencialidade, Integridade e Disponibilidade); Ameaças e ataques cibernéticos',
+          'Segurança defensiva: Firewalls, IDS/IPS, WAF, VPN, antimalware e hardening de sistemas',
+          'Segurança de aplicações: OWASP Top 10 e gestão de vulnerabilidades (CVE, NVD, CVSS)',
+          'Autenticação e autorização: MFA, SSO, OAuth 2.0, OpenID Connect, JWT, RBAC e ABAC',
+          'Criptografia simétrica, assimétrica, funções hash e certificados digitais ICP-Brasil',
+          'Normas e controles: ISO/IEC 27001 e 27002, NIST CSF e CIS Controls; LGPD (Lei nº 13.709/2018)',
+        ],
+      },
+      {
+        id: 'abgf_gestao_governanca',
+        name: 'Gestão de TI: ITIL 4, COBIT 2019 e Contratações Públicas',
+        subtopics: [
+          'Planejamento Estratégico de TI e alinhamento com o negócio; Indicadores (KPIs)',
+          'ITIL v4: Gerenciamento de incidentes, problemas, mudanças e níveis de serviço; Melhoria contínua',
+          'COBIT 2019: Objetivos de governança e gestão, princípios e componentes de controle',
+          'Gerenciamento de projetos: PMBOK, Scrum e Kanban',
+          'Contratações de TI na Administração Pública: IN SGD/ME nº 94/2022 e noções de licitações',
         ],
       },
     ],

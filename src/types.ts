@@ -1,4 +1,4 @@
-export type ExamId = 'seplag' | 'dataprev';
+export type ExamId = 'seplag' | 'dataprev' | 'transpetro' | 'abgf';
 
 export type QuestionFormat = 'multipla_escolha' | 'certo_errado';
 
@@ -106,4 +106,20 @@ export interface PerformanceStats {
       percentage: number;
     }
   >;
+}
+
+export type ChatRole = 'user' | 'model';
+
+export type ChatbotPersona = 'professor' | 'recursos' | 'flash_lite' | 'examinador_pro';
+
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  content: string;
+  timestamp: string;
+  contextQuestion?: {
+    id: string;
+    statement: string;
+    correctOptionId: string;
+  };
 }

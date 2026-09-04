@@ -17,6 +17,7 @@ import {
   Timer,
   AlertTriangle,
   Target,
+  Bot,
 } from 'lucide-react';
 import { SimuladoSession, Question, UserAnswer, ExamId, SubjectPerformance } from '../types';
 import { EXAMS_INFO } from '../data/syllabusData';
@@ -27,6 +28,7 @@ interface SimuladoResultProps {
   onRestartNewSimulado: () => void;
   onRetryErrorsOnly: (errorQuestions: Question[]) => void;
   onGoToDashboard: () => void;
+  onOpenMentorWithQuestion?: (question: Question) => void;
 }
 
 export const SimuladoResult: React.FC<SimuladoResultProps> = ({
@@ -34,8 +36,9 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
   onRestartNewSimulado,
   onRetryErrorsOnly,
   onGoToDashboard,
+  onOpenMentorWithQuestion,
 }) => {
-  const [filterMode, setFilterMode] = useState<'all' | 'correct' | 'errors'>('all');
+  const [filterMode, setFilterMode] = useState<'all' | 'correct' | 'errors' | 'bottlenecks'>('all');
   const [expandedQuestions, setExpandedQuestions] = useState<Record<string, boolean>>({});
   const [selectedAiQuestion, setSelectedAiQuestion] = useState<Question | null>(null);
 
@@ -72,8 +75,11 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
   const filteredQuestions = session.questions.filter((q) => {
     const userAns = session.answers.find((a) => a.questionId === q.id);
     const isCorrect = !!userAns?.isCorrect;
+    const isBottleneck = (userAns?.timeSpentSeconds || 0) > 180;
+
     if (filterMode === 'correct') return isCorrect;
     if (filterMode === 'errors') return !isCorrect;
+    if (filterMode === 'bottlenecks') return isBottleneck;
     return true;
   });
 
@@ -276,10 +282,10 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
           </div>
 
           {/* Filter tabs */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+          <div className="flex flex-wrap items-center bg-slate-100 p-1 rounded-xl gap-1">
             <button
               onClick={() => setFilterMode('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 filterMode === 'all'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -289,7 +295,7 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
             </button>
             <button
               onClick={() => setFilterMode('correct')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 filterMode === 'correct'
                   ? 'bg-white text-emerald-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -299,7 +305,7 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
             </button>
             <button
               onClick={() => setFilterMode('errors')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
                 filterMode === 'errors'
                   ? 'bg-white text-rose-700 shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -307,6 +313,19 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
             >
               Erros ({session.totalQuestions - session.correctCount})
             </button>
+            {bottleneckCount > 0 && (
+              <button
+                onClick={() => setFilterMode('bottlenecks')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1 ${
+                  filterMode === 'bottlenecks'
+                    ? 'bg-white text-amber-800 shadow-xs'
+                    : 'text-amber-700 hover:text-amber-950'
+                }`}
+              >
+                <Timer className="w-3 h-3 text-amber-600" />
+                <span>Gargalos &gt; 3m ({bottleneckCount})</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -496,14 +515,25 @@ export const SimuladoResult: React.FC<SimuladoResultProps> = ({
                     )}
 
                     {/* Tutor IA Button */}
-                    <div className="pt-2 flex justify-end">
+                    <div className="pt-2 flex flex-wrap items-center justify-end gap-2">
                       <button
                         onClick={() => setSelectedAiQuestion(q)}
-                        className="px-3.5 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-sky-50 text-sky-700 hover:bg-sky-100 border border-sky-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <Sparkles className="w-3.5 h-3.5 text-sky-600" />
-                        Tirar Dúvida Desta Questão com Mentor IA
+                        Tirar Dúvida Rápida
                       </button>
+
+                      {onOpenMentorWithQuestion && (
+                        <button
+                          onClick={() => onOpenMentorWithQuestion(q)}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                          title="Abrir no Mentor IA com contexto completo para debater pegadinhas ou recurso"
+                        >
+                          <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>Debater no Mentor IA FGV</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}

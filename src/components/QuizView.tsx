@@ -18,6 +18,9 @@ import {
   Timer,
   Target,
   Keyboard,
+  Copy,
+  Bot,
+  Type,
 } from 'lucide-react';
 import { Question, QuestionFormat, SimuladoMode, UserAnswer } from '../types';
 import { AiTutorModal } from './AiTutorModal';
@@ -28,6 +31,7 @@ interface QuizViewProps {
   examName: string;
   onFinishQuiz: (answers: UserAnswer[], totalTimeSeconds: number) => void;
   onCancelQuiz: () => void;
+  onOpenMentorWithQuestion?: (question: Question) => void;
 }
 
 export const QuizView: React.FC<QuizViewProps> = ({
@@ -36,6 +40,7 @@ export const QuizView: React.FC<QuizViewProps> = ({
   examName,
   onFinishQuiz,
   onCancelQuiz,
+  onOpenMentorWithQuestion,
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
@@ -46,6 +51,8 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [questionTimeMap, setQuestionTimeMap] = useState<Record<string, number>>({});
   const [isRiscadorMode, setIsRiscadorMode] = useState<boolean>(false);
+  const [fontSize, setFontSize] = useState<'sm' | 'base' | 'lg'>('base');
+  const [copied, setCopied] = useState(false);
 
   const currentQuestion = questions[currentIndex];
   const isTreino = mode === 'treino';
@@ -53,6 +60,15 @@ export const QuizView: React.FC<QuizViewProps> = ({
   const currentSelectedOption = selectedAnswers[currentQuestion.id];
   const currentQuestionTime = questionTimeMap[currentQuestion.id] || 0;
   const isBottleneck = currentQuestionTime >= 180;
+
+  const handleCopyQuestion = () => {
+    const text = `[${currentQuestion.subjectName} - ${currentQuestion.topicName}]\n${currentQuestion.statement}\n\n` +
+      currentQuestion.options.map(o => `${o.id}) ${o.text}`).join('\n');
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {});
+  };
 
   // Timer: total exam time + individual per-question time
   useEffect(() => {
@@ -422,9 +438,92 @@ export const QuizView: React.FC<QuizViewProps> = ({
           </div>
         )}
 
+        {/* Question Action Tools Bar */}
+        <div className="flex items-center justify-between gap-2 pb-3 mb-4 border-b border-slate-100">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500">
+            <span className="flex items-center gap-1 font-medium">
+              <Type className="w-3.5 h-3.5 text-slate-400" />
+              Tamanho do texto:
+            </span>
+            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+              <button
+                type="button"
+                onClick={() => setFontSize('sm')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                  fontSize === 'sm' ? 'bg-white shadow-2xs text-slate-900' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Tamanho pequeno"
+              >
+                A-
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize('base')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                  fontSize === 'base' ? 'bg-white shadow-2xs text-slate-900' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Tamanho padrão"
+              >
+                A
+              </button>
+              <button
+                type="button"
+                onClick={() => setFontSize('lg')}
+                className={`px-2 py-0.5 rounded text-[11px] font-bold transition-colors ${
+                  fontSize === 'lg' ? 'bg-white shadow-2xs text-slate-900' : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Tamanho ampliado"
+              >
+                A+
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleCopyQuestion}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 text-xs font-medium transition-colors flex items-center gap-1"
+              title="Copiar texto da questão para anotações"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold">Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5 text-slate-400" />
+                  <span className="hidden sm:inline">Copiar Questão</span>
+                </>
+              )}
+            </button>
+
+            {onOpenMentorWithQuestion && (
+              <button
+                type="button"
+                onClick={() => onOpenMentorWithQuestion(currentQuestion)}
+                className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-semibold transition-colors flex items-center gap-1"
+                title="Abrir no Chatbot Mentor IA com o contexto desta questão"
+              >
+                <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Mentor IA FGV</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Statement (Enunciado) */}
         <div className="prose prose-slate max-w-none mb-6">
-          <p className="text-base sm:text-lg text-slate-900 font-normal leading-relaxed whitespace-pre-line">
+          <p
+            className={`text-slate-900 font-normal leading-relaxed whitespace-pre-line ${
+              fontSize === 'sm'
+                ? 'text-sm sm:text-base'
+                : fontSize === 'lg'
+                ? 'text-lg sm:text-xl'
+                : 'text-base sm:text-lg'
+            }`}
+          >
             {currentQuestion.statement}
           </p>
         </div>

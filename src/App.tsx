@@ -6,6 +6,8 @@ import { SimuladoResult } from './components/SimuladoResult';
 import { PerformanceDashboard } from './components/PerformanceDashboard';
 import { CadernoDeErros } from './components/CadernoDeErros';
 import { SyllabusViewer } from './components/SyllabusViewer';
+import { GeminiChatbot } from './components/GeminiChatbot';
+import { Bot, Sparkles } from 'lucide-react';
 import {
   ExamId,
   Question,
@@ -19,8 +21,9 @@ import { EXAMS_INFO, SYLLABUS_DATA } from './data/syllabusData';
 import { CURATED_QUESTIONS } from './data/curatedQuestions';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'simulado' | 'dashboard' | 'erros' | 'edital'>('simulado');
+  const [currentTab, setCurrentTab] = useState<'simulado' | 'dashboard' | 'erros' | 'edital' | 'mentor'>('simulado');
   const [selectedExamId, setSelectedExamId] = useState<ExamId>('seplag');
+  const [activeMentorQuestion, setActiveMentorQuestion] = useState<Question | null>(null);
 
   // Simulado progress state
   const [simuladoStatus, setSimuladoStatus] = useState<'setup' | 'in_progress' | 'result'>('setup');
@@ -73,6 +76,8 @@ export default function App() {
     const byExam: PerformanceStats['byExam'] = {
       seplag: { total: 0, correct: 0, percentage: 0 },
       dataprev: { total: 0, correct: 0, percentage: 0 },
+      transpetro: { total: 0, correct: 0, percentage: 0 },
+      abgf: { total: 0, correct: 0, percentage: 0 },
     };
 
     sessions.forEach((s) => {
@@ -326,6 +331,11 @@ export default function App() {
     }
   };
 
+  const handleOpenMentorWithQuestion = (question: Question) => {
+    setActiveMentorQuestion(question);
+    setCurrentTab('mentor');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased selection:bg-sky-100 selection:text-sky-900">
       <Navbar
@@ -365,6 +375,7 @@ export default function App() {
                 examName={EXAMS_INFO[selectedExamId]?.name || 'Simulado TI'}
                 onFinishQuiz={handleFinishQuiz}
                 onCancelQuiz={() => setSimuladoStatus('setup')}
+                onOpenMentorWithQuestion={handleOpenMentorWithQuestion}
               />
             )}
 
@@ -374,6 +385,7 @@ export default function App() {
                 onRestartNewSimulado={() => setSimuladoStatus('setup')}
                 onRetryErrorsOnly={(errors) => handleRetryErrors(errors)}
                 onGoToDashboard={() => setCurrentTab('dashboard')}
+                onOpenMentorWithQuestion={handleOpenMentorWithQuestion}
               />
             )}
           </>
@@ -407,7 +419,32 @@ export default function App() {
         {currentTab === 'edital' && (
           <SyllabusViewer onStartSubjectSimulado={handleStartSubjectFromSyllabus} />
         )}
+
+        {currentTab === 'mentor' && (
+          <div className="max-w-5xl mx-auto py-6 px-4 sm:px-6">
+            <GeminiChatbot
+              contextQuestion={activeMentorQuestion}
+              onClearContextQuestion={() => setActiveMentorQuestion(null)}
+            />
+          </div>
+        )}
       </main>
+
+      {/* Botão Flutuante de Acesso Rápido ao Mentor IA */}
+      {currentTab !== 'mentor' && (
+        <aside aria-label="Acesso Rápido" className="fixed bottom-6 right-6 z-30">
+          <button
+            onClick={() => setCurrentTab('mentor')}
+            className="group flex items-center gap-2.5 px-4 py-3 rounded-full bg-gradient-to-r from-sky-600 via-indigo-600 to-sky-700 text-white shadow-lg hover:shadow-xl hover:scale-105 transition-all duration-200 cursor-pointer border border-sky-400/30"
+            title="Abrir Mentor IA Especialista FGV"
+          >
+            <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+              <Bot className="w-4 h-4 text-white animate-pulse" />
+            </div>
+            <span className="text-xs font-bold tracking-wide pr-1">Mentor IA FGV</span>
+          </button>
+        </aside>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-500">
